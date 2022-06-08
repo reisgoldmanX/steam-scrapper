@@ -1,2 +1,1 @@
-import output
-import scrapper
+from scrapper import SteamUser
