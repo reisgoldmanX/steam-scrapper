@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
-from helpers import SteamPages, JsonJobs, RequestJobs
-
+from .helpers import SteamPages, JsonJobs, RequestJobs
+import cchardet
 
 class SteamUser:
     def __init__(self, profile_link: str) -> None:
@@ -10,13 +10,13 @@ class SteamUser:
         self.__main_page = self.steam_pages.main_page
         self.steam_id = self.steam_pages.steam_id
 
-    def clean_text(self, text: str) -> str:
+    def _clean_text(self, text: str) -> str:
         new_text = text.replace("\t", "")
         new_text = new_text.replace("\n", "")
         new_text = new_text.replace("\r", " ")
         return new_text
 
-    def last_activities(self) -> list:
+    def last_activities(self) -> list[dict]:
         activities: list[dict] = []
 
         recent_games = self.__main_page.find_all("div", class_="recent_game")
@@ -28,7 +28,7 @@ class SteamUser:
                 "game_link": game.find("div", class_="game_info_cap")
                 .find("a")
                 .get("href"),
-                "game_play_time": self.clean_text(
+                "game_play_time": self._clean_text(
                     game.find("div", class_="game_info_details").text
                 ),
                 "game_achievement_summary": game.find("span", class_="ellipsis").text,
@@ -42,6 +42,7 @@ class SteamUser:
             activity_info["last_game_achievements_earned"] = last_achievements
 
             activities.append(activity_info)
+
         return activities
 
     def current_status(self) -> str:
@@ -93,8 +94,8 @@ class SteamUser:
             badge_dict = {
                 "badge_link": badge_link,
                 "badge_title": badge_title.text,
-                "badge_xp": self.clean_text(badge_xp.text),
-                "badge_unlocked_at": self.clean_text(badge_unlock_time.text),
+                "badge_xp": self._clean_text(badge_xp.text),
+                "badge_unlocked_at": self._clean_text(badge_unlock_time.text),
             }
             profile_badges.append(badge_dict)
 
@@ -136,10 +137,11 @@ class SteamUser:
         screen_shots_source: list[str] = []
 
         screen_shots_page = self.steam_pages.screenshots_page()
-
         for screen_shot in screen_shots_page.find_all("div", class_="floatHelp"):
             screen_shot = screen_shot.find("a")
-            screen_shots_source.append(screen_shot.get("href"))
+            media_page = self.steam_pages.media_pages(screen_shot.get("href"))
+            src = media_page.find("img", id="ActualMedia").get("src")
+            screen_shots_source.append(src)
 
         return screen_shots_source
 
@@ -170,7 +172,9 @@ class SteamUser:
 
         for artwork in artwork_page.find_all("div", class_="floatHelp"):
             artwork = artwork_page.find("a")
-            artworks.append(artwork.get("href"))
+            media_page = self.steam_pages.media_pages(artwork.get("href"))
+            src = media_page.find("img", id="ActualMedia").get("src")
+            artworks.append(src)
 
         return artworks
 
@@ -199,4 +203,3 @@ class SteamUser:
             }
             groups.append(group_element)
         return groups
-

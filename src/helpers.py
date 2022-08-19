@@ -1,7 +1,6 @@
+import os, requests
 from bs4 import BeautifulSoup
-import requests
-
-from json import JSONDecoder
+from json import JSONDecoder, load, dump
 
 
 class RequestJobs:
@@ -27,10 +26,10 @@ class SteamPages:
         self.profile_link = profile_link
         self.request_jobs = RequestJobs()
         self.main_page = BeautifulSoup(self.request_jobs.get_req(profile_link), "lxml")
-        self.page_links = self.findPages()
-        self.steam_id = self.get_SteamID()
+        self.page_links = self._findPages()
+        self.steam_id = self._get_SteamID()
 
-    def get_SteamID(self) -> str:
+    def _get_SteamID(self) -> str:
         link_id = self.profile_link.split("/")[-2]
         steam_id_page = BeautifulSoup(
             self.request_jobs.get_req(
@@ -41,7 +40,7 @@ class SteamPages:
         steam_id = steam_id_page.find_all("code")[2].text
         return steam_id
 
-    def findPages(self) -> list[str]:
+    def _findPages(self) -> list[str]:
         source_parents = self.main_page.find_all(
             "div", class_="profile_count_link ellipsis"
         )
@@ -83,6 +82,9 @@ class SteamPages:
     def artwork_page(self) -> BeautifulSoup:
         id = self.profile_link.split("/")[-2]
         link = f"https://steamcommunity.com/id/{id}/images/?appid=0&sort=newestfirst&browsefilter=myfiles&view=grid"
+        return BeautifulSoup(self.request_jobs.get_req(link), "lxml")
+
+    def media_pages(self, link: str) -> BeautifulSoup:
         return BeautifulSoup(self.request_jobs.get_req(link), "lxml")
 
 
@@ -140,3 +142,51 @@ class JsonJobs:
                 pos = match + index
             except ValueError:
                 pos = match + 1
+
+
+class WritingJobs:
+    def create_output_dir(
+        parent_path: str = f"{os.curdir}",
+        file_name: str = 000,
+        try_count: int = 1000,
+    ) -> str:
+        for num in range(try_count):
+            try:
+                dir_name = file_name + f"-{num}"
+                path = os.path.join(parent_path, dir_name)
+                os.mkdir(path)
+                break
+            except FileExistsError:
+                Exception("File already Exists. Changing index")
+
+                continue
+        return path
+
+    def create_json(output_dir: str) -> str:
+        json_path = os.path.join(output_dir, "main.json")
+        file = open(json_path, "w")
+        dump([], file, indent=4)
+        file.close()
+        return json_path
+
+    def write_json(json_path: str, element):
+        with open(json_path, "r+") as json_file:
+            json_obj = load(json_file)
+            json_obj.append(element)
+            json_file.seek(0)
+            dump(json_obj, json_file, indent=4)
+            json_file.close()
+
+    def download_content(
+        request_job: RequestJobs, output_path: str, link: tuple[str, str]
+    ) -> str:
+        output_path = WritingJobs.create_output_dir(output_path, link[0], 1)
+
+        if link[0] == "profile_pic":
+            file_id = link[1].split("/")[-1]
+        else:
+            file_id = link[1].split("/")[4] + ".jpg"
+
+        file_path = os.path.join(output_path, file_id)
+        open(file_path, "wb").write(request_job.get_req(link[1], timeout=35))
+        return file_path
